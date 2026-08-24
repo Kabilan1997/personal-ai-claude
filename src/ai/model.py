@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, List, Optional
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, pipeline
 import torch
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class AIModel:
     """Main AI model for generating responses"""
 
-    def __init__(self, model_name: str = "distilbert-base-uncased"):
+    def __init__(self, model_name: str = "gpt2"):
         """
         Initialize the AI model
         
@@ -22,8 +22,18 @@ class AIModel:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         try:
+            # Use text-generation pipeline instead of raw model loading
+            self.generator = pipeline(
+                "text-generation",
+                model=model_name,
+                device=0 if self.device.type == "cuda" else -1
+            )
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
+            
+            # Set pad token for GPT2 (doesn't have one by default)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
             logger.info(f"Loaded model {model_name} on {self.device}")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
@@ -49,19 +59,28 @@ class AIModel:
             Generated response text
         """
         try:
-            inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+            # Clean the prompt to avoid repetition
+            clean_prompt = prompt.strip()
+            if len(clean_prompt) == 0:
+                return "I'm ready to chat. What would you like to talk about?"
             
-            outputs = self.model.generate(
-                inputs,
+            outputs = self.generator(
+                clean_prompt,
                 max_length=max_length,
                 temperature=temperature,
                 top_p=top_p,
                 do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id,
+                num_return_sequences=1,
             )
             
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            return response
+            response = outputs[0]["generated_text"]
+            
+            # Remove the prompt from the response
+            if response.startswith(clean_prompt):
+                response = response[len(clean_prompt):].strip()
+            
+            return response if response else "I'm thinking about that..."
+            
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             return "I apologize, but I encountered an error generating a response."
