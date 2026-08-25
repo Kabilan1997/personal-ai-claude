@@ -16,7 +16,7 @@ class Config:
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     
     # Model Settings
-    MODEL_NAME = os.getenv("MODEL_NAME", "distilbert-base-uncased")
+    MODEL_NAME = os.getenv("MODEL_NAME", "gpt2")
     MODEL_MAX_LENGTH = int(os.getenv("MODEL_MAX_LENGTH", 512))
     TEMPERATURE = float(os.getenv("TEMPERATURE", 0.7))
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", 150))
